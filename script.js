@@ -6,7 +6,7 @@ const STACK_CLASSES = ['Class III', 'Class II', 'Class I'];
 const CLASS_COLORS = {
   'Class I': '#f2a7a0',
   'Class II': '#a9c9ee',
-  'Class III': '#d8d1c7',
+  'Class III': '#d8d1c7c7',
 };
 const CAUSE_COLORS = {
   'Listeria': '#e63946',
@@ -282,79 +282,145 @@ function drawDurationChart() {
     && d.durationDays <= 365
   ));
 
-  const binsByClass = new Map(CLASSES.map(classification => [
-    classification,
-    d3.bin()
-      .domain([0, 365])
-      .thresholds(d3.range(0, 391, 30))(durationRecords.filter(d => d.classification === classification).map(d => d.durationDays)),
-  ]));
-
   const { width, height } = chartSize(selector, 350);
-  const margin = { top: 68, right: 26, bottom: 42, left: 58 };
+  const margin = { top: 90, right: 26, bottom: 42, left: 58 }; 
   const innerWidth = width - margin.left - margin.right;
-  const facetGap = 24;
-  const facetHeight = (height - margin.top - margin.bottom - facetGap * 2) / 3;
+  const innerHeight = height - margin.top - margin.bottom;
 
   const svg = d3.select(selector).append('svg')
     .attr('viewBox', `0 0 ${width} ${height}`)
     .attr('role', 'img')
-    .attr('aria-label', 'Faceted histograms showing days between recall initiation and termination');
+    .attr('aria-label', 'Overlapping frequency curves showing days between recall initiation and termination');
 
   const titleGroup = svg.append('g').attr('transform', `translate(${margin.left},28)`);
-  addTitle(titleGroup, 'How long food recalls remain active', 'Most recalls are resolved within the first few months, though some last longer');
+  addTitle(titleGroup, 'How long food recalls remain active', 'Comparing the volume and resolution timelines by severity class');
+
+  const legendGroup = titleGroup.append('g')
+    .attr('transform', 'translate(0, 32)'); 
+
+  let currentX = 0;
+  const legendSpacing = 110; 
+
+  CLASSES.forEach((classification) => {
+    const isGrey = classification === "Class III";
+    const itemGroup = legendGroup.append('g')
+      .attr('transform', `translate(${currentX}, 0)`);
+
+    itemGroup.append('rect')
+      .attr('width', 22)
+      .attr('height', 12)
+      .attr('rx', 2) 
+      .style('fill', CLASS_COLORS[classification])
+      .style('opacity', isGrey ? 0.65 : 0.45)
+      .style('stroke-width', isGrey ? '1.5px' : '0px');
+
+    itemGroup.append('text')
+      .attr('x', 28)
+      .attr('y', 10)
+      .style('font-size', '12px')
+      .style('font-weight', '500')
+      .style('fill', '#333333')
+      .text(classification);
+
+    currentX += legendSpacing;
+  });
 
   const x = d3.scaleLinear()
     .domain([0, 365])
     .range([0, innerWidth]);
 
-  const maxBin = d3.max(Array.from(binsByClass.values()).flat(), d => d.length) || 1;
+  function kernelDensityEstimator(kernel, X) {
+    return function(V) {
+      return X.map(x => [x, d3.mean(V, v => kernel(x - v))]);
+    };
+  }
+  function kernelEpanechnikov(bandwidth) {
+    return function(v) {
+      return Math.abs(v /= bandwidth) <= 1 ? 0.75 * (1 - v * v) / bandwidth : 0;
+    };
+  }
+
+  const xTicks = x.ticks(100); 
+  const kde = kernelDensityEstimator(kernelEpanechnikov(25), xTicks);
+
+  const frequencies = CLASSES.map(classification => {
+    const classValues = durationRecords
+      .filter(d => d.classification === classification)
+      .map(d => d.durationDays);
+    
+    const totalCount = classValues.length;
+    const rawKde = kde(classValues);
+    const scaledData = rawKde.map(p => [p[0], p[1] * totalCount * 3.65]);
+
+    return {
+      classification: classification,
+      count: totalCount,
+      chartData: scaledData
+    };
+  });
+
+  const maxCount = d3.max(frequencies, f => d3.max(f.chartData, p => p[1])) || 10;
+
   const y = d3.scaleLinear()
-    .domain([0, maxBin])
+    .domain([0, maxCount])
     .nice()
-    .range([facetHeight, 0]);
+    .range([innerHeight, 0]);
 
   const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
 
-  CLASSES.forEach((classification, index) => {
-    const facet = g.append('g').attr('transform', `translate(0,${index * (facetHeight + facetGap)})`);
-    const bins = binsByClass.get(classification);
+  g.append('g')
+    .attr('class', 'grid')
+    .call(d3.axisLeft(y).ticks(5).tickSize(-innerWidth).tickFormat(''));
 
-    facet.append('g')
-      .attr('class', 'grid')
-      .call(d3.axisLeft(y).ticks(3).tickSize(-innerWidth).tickFormat(''));
+  const areaGenerator = d3.area()
+    .curve(d3.curveBasis)
+    .x(d => x(d[0]))
+    .y0(innerHeight)
+    .y1(d => y(d[1]));
 
-    facet.selectAll('rect')
-      .data(bins)
-      .join('rect')
-      .attr('x', d => x(d.x0) + 1)
-      .attr('y', d => y(d.length))
-      .attr('width', d => Math.max(0, x(d.x1) - x(d.x0) - 2))
-      .attr('height', d => facetHeight - y(d.length))
-      .attr('fill', CLASS_COLORS[classification])
-      .attr('opacity', 0.95)
-      .on('mousemove', (event, d) => {
-        showTooltip(event, `<strong>${classification}</strong><br>${formatNumber(d.length)} recalls<br>${Math.round(d.x0)}-${Math.round(d.x1)} days`);
+  const lineGenerator = d3.line()
+    .curve(d3.curveBasis)
+    .x(d => x(d[0]))
+    .y(d => y(d[1]));
+
+  frequencies.forEach((f) => {
+    const isGrey = f.classification === "Class III";
+
+    g.append('path')
+      .datum(f.chartData)
+      .attr('class', 'frequency-area')
+      .attr('d', areaGenerator)
+      .attr('fill', CLASS_COLORS[f.classification])
+      .attr('opacity', isGrey ? 0.65 : 0.45) 
+      .on('mousemove', (event) => {
+        showTooltip(event, `<strong>${f.classification}</strong><br>Total Group Size: ${formatNumber(f.count)} recalls`);
       })
       .on('mouseleave', hideTooltip);
-
-    facet.append('g')
-      .attr('class', 'axis')
-      .call(d3.axisLeft(y).ticks(3).tickFormat(formatNumber));
-
-    facet.append('text')
-      .attr('class', 'facet-label')
-      .attr('x', innerWidth / 2)
-      .attr('y', -6)
-      .attr('text-anchor', 'middle')
-      .text(classification);
-
-    if (index === CLASSES.length - 1) {
-      facet.append('g')
-        .attr('class', 'axis')
-        .attr('transform', `translate(0,${facetHeight})`)
-        .call(d3.axisBottom(x).tickValues([0, 60, 120, 180, 240, 300, 360]));
-    }
   });
+
+  frequencies.forEach((f) => {
+    const isGrey = f.classification === "Class III";
+    const strokeColor = isGrey ? '#949191' : CLASS_COLORS[f.classification];
+    const strokeWidth = '2px';
+
+    g.append('path')
+      .datum(f.chartData)
+      .attr('d', lineGenerator)
+      .style('fill', 'none')
+      .style('stroke', strokeColor)
+      .style('stroke-width', strokeWidth)
+      .style('opacity', '1')
+      .style('pointer-events', 'none');
+  });
+
+  g.append('g')
+    .attr('class', 'axis')
+    .attr('transform', `translate(0,${innerHeight})`)
+    .call(d3.axisBottom(x).tickValues([0, 60, 120, 180, 240, 300, 360]));
+
+  g.append('g')
+    .attr('class', 'axis')
+    .call(d3.axisLeft(y).ticks(5).tickFormat(formatNumber));
 
   svg.append('text')
     .attr('class', 'axis-label')
@@ -365,9 +431,9 @@ function drawDurationChart() {
 
   svg.append('text')
     .attr('class', 'axis-label')
-    .attr('transform', `translate(15,${margin.top + (facetHeight * 3 + facetGap * 2) / 2}) rotate(-90)`)
+    .attr('transform', `translate(15,${margin.top + innerHeight / 2}) rotate(-90)`)
     .attr('text-anchor', 'middle')
-    .text('Number of recalls');
+    .text('Estimated volume (Frequency)');
 }
 
 function updateShares() {

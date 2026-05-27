@@ -97,6 +97,52 @@ h3 {
   font-size: 1.05rem;
 }
 
+.case-study {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.case-study .eyebrow {
+  margin-bottom: 8px;
+}
+
+.case-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-self: stretch;
+}
+
+.metric {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+
+.metric-label {
+  margin-bottom: 4px;
+  color: #777777;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  display: block;
+  color: var(--ink);
+  font-size: 1.08rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .viz-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
@@ -163,9 +209,37 @@ h3 {
 .axis-label,
 .legend-label,
 .legend-title,
-.facet-label {
+.facet-label,
+.chart-note {
   fill: #555555;
+  font-size: 8px;
+}
+
+.chart-note {
+  font-weight: 700;
+}
+
+.example-dot {
+  fill: #222222;
+  stroke: none;
+}
+
+.example-callout {
+  fill: none;
+  stroke: #222222;
+  stroke-width: 1;
+}
+
+.example-label {
+  fill: #222222;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.slice-label {
+  fill: #3f3f3d;
   font-size: 10px;
+  font-weight: 700;
 }
 
 .legend-title,
@@ -214,6 +288,10 @@ footer {
   }
 
   .viz-row {
+    grid-template-columns: 1fr;
+  }
+
+  .case-study {
     grid-template-columns: 1fr;
   }
 

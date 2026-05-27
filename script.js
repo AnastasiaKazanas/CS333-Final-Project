@@ -16,6 +16,13 @@ const CAUSE_COLORS = {
   'Foreign material': '#f4a261',
   'E. coli': '#6a4c93',
 };
+const EXAMPLE_RECALL = {
+  firm: 'Taylor Fresh Foods Inc.',
+  cause: 'Listeria',
+  classification: 'Class I',
+  year: 2024,
+  durationDays: 364,
+};
 
 const parseFDADate = d3.timeParse('%Y%m%d');
 const formatNumber = d3.format(',');
@@ -116,6 +123,28 @@ function addTitle(svg, title, subtitle) {
     .text(subtitle);
 }
 
+function addExampleDot(group, x, y, labelX = x + 10, labelY = y - 10, vertical = false) {
+  group.append('circle')
+    .attr('class', 'example-dot')
+    .attr('cx', x)
+    .attr('cy', y)
+    .attr('r', 4);
+
+  group.append('line')
+    .attr('class', 'example-callout')
+    .attr('x1', vertical ? x : x + 5)
+    .attr('y1', vertical ? y - 6 : y - 5)
+    .attr('x2', vertical ? x : labelX - 3)
+    .attr('y2', vertical ? labelY + 4 : labelY + 3);
+
+  group.append('text')
+    .attr('class', 'example-label')
+    .attr('x', labelX)
+    .attr('y', labelY)
+    .attr('text-anchor', vertical ? 'middle' : 'start')
+    .text('Example');
+}
+
 function drawCauseChart() {
   const selector = '#cause-chart';
   clearChart(selector);
@@ -173,7 +202,6 @@ function drawCauseChart() {
     .style('pointer-events', 'none')
     .text(d => formatPercent(d.data.count / total));
 
-  // Legend
   const legendX = cx + radius + 16;
   const legendStartY = cy - (data.length * 22) / 2;
   const legend = svg.append('g').attr('transform', `translate(${legendX},${legendStartY})`);
@@ -182,6 +210,15 @@ function drawCauseChart() {
     row.append('rect').attr('width', 13).attr('height', 13).attr('fill', CAUSE_COLORS[d.name]).attr('rx', 2);
     row.append('text').attr('x', 18).attr('y', 10).attr('class', 'legend-label').text(d.name);
   });
+
+  const exampleSlice = pie(data).find(d => d.data.name === EXAMPLE_RECALL.cause);
+  if (exampleSlice) {
+    const [dotX, dotY] = d3.arc()
+      .innerRadius(radius * 0.78)
+      .outerRadius(radius * 0.78)
+      .centroid(exampleSlice);
+    addExampleDot(g, dotX + 8, dotY - 24, dotX + 32, dotY - 42);
+  }
 }
 
 function drawSeverityChart() {
@@ -246,6 +283,17 @@ function drawSeverityChart() {
       showTooltip(event, `<strong>${d.data.year} ${d.key}</strong><br>${formatNumber(count)} recalls`);
     })
     .on('mouseleave', hideTooltip);
+
+  const exampleYear = data.find(d => d.year === EXAMPLE_RECALL.year);
+  if (exampleYear) {
+    const lowerBound = STACK_CLASSES
+      .slice(0, STACK_CLASSES.indexOf(EXAMPLE_RECALL.classification))
+      .reduce((sum, key) => sum + exampleYear[key], 0);
+    const upperBound = lowerBound + exampleYear[EXAMPLE_RECALL.classification];
+    const markerX = x(EXAMPLE_RECALL.year) + x.bandwidth() / 2;
+    const markerY = y((lowerBound + upperBound) / 2);
+    addExampleDot(g, markerX, markerY, markerX, markerY - 24, true);
+  }
 
   g.append('g')
     .attr('class', 'axis')
@@ -412,6 +460,16 @@ function drawDurationChart() {
       .style('opacity', '1')
       .style('pointer-events', 'none');
   });
+
+  const exampleFrequency = frequencies.find(f => f.classification === EXAMPLE_RECALL.classification);
+  if (exampleFrequency) {
+    const nearest = d3.least(exampleFrequency.chartData, d => Math.abs(d[0] - EXAMPLE_RECALL.durationDays));
+    if (nearest) {
+      const dotX = x(nearest[0]);
+      const dotY = y(nearest[1]);
+      addExampleDot(g, dotX, dotY, dotX, dotY - 24, true);
+    }
+  }
 
   g.append('g')
     .attr('class', 'axis')

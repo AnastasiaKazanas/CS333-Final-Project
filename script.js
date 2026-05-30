@@ -243,6 +243,11 @@ function drawCauseChart() {
     }
   });
 
+  const pieExamples = {
+    'Listeria': ['e.g. Dole American Blend'],
+    'Undeclared allergens': ["e.g. Trader Joe's", 'Hot Honey Mustard Dressing'],
+  };
+
   labelData.forEach(l => {
     const name = l.d.data.name;
     const mid = (l.d.startAngle + l.d.endAngle) / 2;
@@ -307,6 +312,22 @@ function drawCauseChart() {
         .style('fill', '#333')
         .style('pointer-events', 'none')
         .text(labelText);
+
+      const exampleLines = pieExamples[name];
+      if (exampleLines) {
+        exampleLines.forEach((line, i) => {
+          g.append('text')
+            .attr('x', (l.onRight ? lx + nudge + 4 : lx + nudge - 4))
+            .attr('y', ly + 13 + i * 11)
+            .attr('dominant-baseline', 'middle')
+            .attr('text-anchor', l.onRight ? 'start' : 'end')
+            .style('font-size', '9px')
+            .style('fill', '#666')
+            .style('font-style', 'italic')
+            .style('pointer-events', 'none')
+            .text(line);
+        });
+      }
     }
   });
 }

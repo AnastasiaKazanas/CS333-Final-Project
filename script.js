@@ -1,6 +1,6 @@
 const DATA_JSON = 'data/food-enforcement-001-of-001.json';
 const YEAR_MIN = 2012;
-const YEAR_MAX = 2024;
+const YEAR_MAX = 2025;
 const CLASSES = ['Class I', 'Class II', 'Class III'];
 const STACK_CLASSES = ['Class III', 'Class II', 'Class I'];
 const CLASS_COLORS = {
@@ -123,7 +123,10 @@ function addTitle(svg, title, subtitle) {
     .text(subtitle);
 }
 
-function addExampleDot(group, x, y, labelX = x + 10, labelY = y - 10, vertical = false) {
+function addExampleDot(group, x, y, labelX = x + 10, labelY = y - 10, vertical = false, label = 'Example') {
+  const lines = Array.isArray(label) ? label : [label];
+  const lineHeight = 11;
+
   group.append('circle')
     .attr('class', 'example-dot')
     .attr('cx', x)
@@ -135,14 +138,20 @@ function addExampleDot(group, x, y, labelX = x + 10, labelY = y - 10, vertical =
     .attr('x1', vertical ? x : x + 5)
     .attr('y1', vertical ? y - 6 : y - 5)
     .attr('x2', vertical ? x : labelX - 3)
-    .attr('y2', vertical ? labelY + 4 : labelY + 3);
+    .attr('y2', vertical ? labelY + (lines.length - 1) * lineHeight + 4 : labelY + 3);
 
-  group.append('text')
+  const textEl = group.append('text')
     .attr('class', 'example-label')
     .attr('x', labelX)
     .attr('y', labelY)
-    .attr('text-anchor', vertical ? 'middle' : 'start')
-    .text('Example');
+    .attr('text-anchor', vertical ? 'middle' : 'start');
+
+  lines.forEach((line, i) => {
+    textEl.append('tspan')
+      .attr('x', labelX)
+      .attr('dy', i === 0 ? 0 : lineHeight)
+      .text(line);
+  });
 }
 
 function drawCauseChart() {
@@ -163,7 +172,7 @@ function drawCauseChart() {
   const cy = margin.top + innerHeight / 2 + 40;
 
   const svg = d3.select(selector).append('svg')
-    .attr('viewBox', `0 0 ${width} ${height + 60}`)
+    .attr('viewBox', `0 0 ${width} ${height + 90}`)
     .attr('role', 'img')
     .attr('aria-label', 'Pie chart of leading causes of FDA food recalls');
 
@@ -244,8 +253,8 @@ function drawCauseChart() {
   });
 
   const pieExamples = {
-    'Listeria': ['e.g. Dole American Blend'],
-    'Undeclared allergens': ["e.g. Trader Joe's", 'Hot Honey Mustard Dressing'],
+    'Listeria': ['e.g. Dole American Blend', "Taylor's Fresh Foods Inc."],
+    'Undeclared allergens': ["e.g. Trader Joe's Hot Honey Mustard Dressing"],
   };
 
   labelData.forEach(l => {
@@ -316,9 +325,10 @@ function drawCauseChart() {
       const exampleLines = pieExamples[name];
       if (exampleLines) {
         exampleLines.forEach((line, i) => {
+          const yOffset = 13 + i * 11;
           g.append('text')
             .attr('x', (l.onRight ? lx + nudge + 4 : lx + nudge - 4))
-            .attr('y', ly + 13 + i * 11)
+            .attr('y', ly + yOffset)
             .attr('dominant-baseline', 'middle')
             .attr('text-anchor', l.onRight ? 'start' : 'end')
             .style('font-size', '9px')
@@ -395,21 +405,29 @@ function drawSeverityChart() {
     })
     .on('mouseleave', hideTooltip);
 
-  const exampleYear = data.find(d => d.year === EXAMPLE_RECALL.year);
-  if (exampleYear) {
+  const barAnnotations = [
+    { year: 2012, classification: 'Class I',  label: ['Dole', 'American', 'Blend'],        yOffset: -95 },
+    { year: 2023, classification: 'Class I',  label: ['Kirkland', 'Strawberries'],    yOffset: -95 },
+    { year: 2024, classification: 'Class I',  label: ['Taylor', 'Fresh', 'Foods Inc.'],  yOffset: -80 },
+    { year: 2025, classification: 'Class II', label: ['Nestle', 'Toll House'],        yOffset: -95 },
+  ];
+
+  barAnnotations.forEach(({ year, classification, label, yOffset }) => {
+    const exampleYear = data.find(d => d.year === year);
+    if (!exampleYear) return;
     const lowerBound = STACK_CLASSES
-      .slice(0, STACK_CLASSES.indexOf(EXAMPLE_RECALL.classification))
+      .slice(0, STACK_CLASSES.indexOf(classification))
       .reduce((sum, key) => sum + exampleYear[key], 0);
-    const upperBound = lowerBound + exampleYear[EXAMPLE_RECALL.classification];
-    const markerX = x(EXAMPLE_RECALL.year) + x.bandwidth() / 2;
+    const upperBound = lowerBound + exampleYear[classification];
+    const markerX = x(year) + x.bandwidth() / 2;
     const markerY = y((lowerBound + upperBound) / 2);
-    addExampleDot(g, markerX, markerY, markerX, markerY - 24, true);
-  }
+    addExampleDot(g, markerX, markerY, markerX, markerY + yOffset, true, label);
+  });
 
   g.append('g')
     .attr('class', 'axis')
     .attr('transform', `translate(0,${innerHeight})`)
-    .call(d3.axisBottom(x).tickValues(years.filter(y => y % 2 === 0)));
+    .call(d3.axisBottom(x).tickValues(years.filter(y => y % 2 === 0 || y === YEAR_MAX)));
 
   g.append('g')
     .attr('class', 'axis')
@@ -454,11 +472,12 @@ function drawDurationChart() {
   const titleGroup = svg.append('g').attr('transform', `translate(${margin.left},28)`);
   addTitle(titleGroup, 'How long food recalls remain active', 'Comparing the volume and resolution timelines by severity class');
 
+  const legendSpacing = 110;
+  const legendTotalWidth = (CLASSES.length - 1) * legendSpacing + 88;
   const legendGroup = titleGroup.append('g')
-    .attr('transform', 'translate(0, 32)'); 
+    .attr('transform', `translate(${innerWidth - legendTotalWidth}, 32)`);
 
   let currentX = 0;
-  const legendSpacing = 110; 
 
   CLASSES.forEach((classification) => {
     const isGrey = classification === "Class III";
@@ -572,15 +591,22 @@ function drawDurationChart() {
       .style('pointer-events', 'none');
   });
 
-  const exampleFrequency = frequencies.find(f => f.classification === EXAMPLE_RECALL.classification);
-  if (exampleFrequency) {
-    const nearest = d3.least(exampleFrequency.chartData, d => Math.abs(d[0] - EXAMPLE_RECALL.durationDays));
-    if (nearest) {
-      const dotX = x(nearest[0]);
-      const dotY = y(nearest[1]);
-      addExampleDot(g, dotX, dotY, dotX, dotY - 24, true);
-    }
-  }
+  const durationAnnotations = [
+    { classification: 'Class II', durationDays: 48,  label: ['Fresh Express', 'Spring Mix'],  xOffset: 0,  yOffset: -24 },
+    { classification: 'Class I',  durationDays: 70,  label: ['Kirkland', 'Organic Eggs'],     xOffset: 20, yOffset: -30 },
+    { classification: 'Class I',  durationDays: 261, label: ['Sysco', 'Salsa Cup'],           xOffset: 0,  yOffset: -50 },
+    { classification: 'Class I',  durationDays: 364, label: ['Taylor', 'Fresh', 'Foods Inc.'],   xOffset: 0,  yOffset: -60 },
+  ];
+
+  durationAnnotations.forEach(({ classification, durationDays, label, xOffset, yOffset }) => {
+    const freq = frequencies.find(f => f.classification === classification);
+    if (!freq) return;
+    const nearest = d3.least(freq.chartData, d => Math.abs(d[0] - durationDays));
+    if (!nearest) return;
+    const dotX = x(nearest[0]);
+    const dotY = y(nearest[1]);
+    addExampleDot(g, dotX, dotY, dotX + xOffset, dotY + yOffset, xOffset === 0, label);
+  });
 
   g.append('g')
     .attr('class', 'axis')

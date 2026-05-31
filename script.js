@@ -9,12 +9,12 @@ const CLASS_COLORS = {
   'Class III': '#d8d1c7c7',
 };
 const CAUSE_COLORS = {
-  'Listeria': '#111111',
-  'Undeclared allergens': '#444444',
-  'Salmonella': '#666666',
-  'Labeling errors': '#888888',
-  'Foreign material': '#aaaaaa',
-  'E. coli': '#cccccc',
+  'Listeria': '#5B2A86',
+  'Undeclared allergens': '#7353A3',
+  'Salmonella': '#907db3',
+  'Labeling errors': '#B39CD0',
+  'Foreign material': '#D4C2E8',
+  'E. coli': '#F2ECF9',
 };
 const EXAMPLE_RECALL = {
   firm: 'Taylor Fresh Foods Inc.',
